@@ -1,12 +1,13 @@
-// Package bool implements a recursive-descent parser for boolean expressions according to the following grammar.
+// Package bools implements a recursive-descent parser for boolean expressions according to the following grammar.
 //
-//	parens   -> ( and ) | and
-//	and      -> or AND parens | or
-//	or       -> not OR parens | not
-//	not      -> NOT parens | unparsed
-//	unparsed -> .*
+//		expr     -> and
+//		and      -> or 'AND' and | or
+//		or       -> not 'OR' or | not
+//	    not      -> 'NOT' parens | parens
+//		parens   -> '(' expr ')' | unparsed
+//		unparsed -> '.*
 //
-// It leaves unparsed portions of the expression in parse.Unparsed nodes, for later consumption by other processes.
+// It leaves unparsed portions of the expression in parse.Unparsed nodes, for later consumption by other parsers.
 //
 // The syntax used by this parser is configurable at runtime, see NewParser for details. By default, this parser
 // provides a case-sensitive variety of ANSI SQL syntax.
@@ -14,19 +15,79 @@
 // Care must be taken when selecting a NOT operator, since the parser provided by this package is not aware of
 // the expression language in use. For instance, selecting '!' as the NOT operator may result in conflicts which used
 // with expressions containing '!=', due to parsing ambiguity.
-package bool
+package bools
 
 import (
 	"fmt"
 	"github.com/orkes-io/go-parse"
 	"strings"
-	"unicode"
 )
 
-// Expr represents a boolean expression.
-type Expr interface {
-	parse.AST
-	BoolExpr() // marker interface
+// VarInterpreter provides an interpreter which looks up the value of every parsed.Unparsed node with a single token in
+// the provided map.
+func VarInterpreter(variables map[string]bool) parse.Interpreter[bool] {
+	return func(ast parse.AST) (bool, error) {
+		if variables == nil {
+			return false, fmt.Errorf("%w: nil map", parse.ErrEval)
+		}
+		switch ast := ast.(type) {
+		case parse.Unparsed:
+			if len(ast.Contents) > 1 {
+				return false, fmt.Errorf("%w: cannot evaluate multi-word variables; found '%v'", parse.ErrEval, strings.Join(ast.Contents, " "))
+			}
+			val, ok := variables[ast.Contents[0]]
+			if !ok {
+				return false, fmt.Errorf("%w: unknown variable '%s'", parse.ErrEval, ast.Contents[0])
+			}
+			return val, nil
+		default:
+			return false, fmt.Errorf("%w: unknown AST node: %v", parse.ErrUnknownAST, ast)
+		}
+	}
+}
+
+// Eval evaluates the provided AST node using the provided Interpreter, which must be capable of interpreting any nodes
+// not found in the bools package.
+func Eval(expr parse.AST, interpreter parse.Interpreter[bool]) (bool, error) {
+	if interpreter == nil {
+		return false, fmt.Errorf("%w: nil Interpreter", parse.ErrEval)
+	}
+	if expr == nil {
+		return false, fmt.Errorf("%w: nil expression", parse.ErrEval)
+	}
+	switch expr := expr.(type) {
+	case *BinExpr:
+		if expr.Op != OpAnd && expr.Op != OpOr {
+			return false, fmt.Errorf("unexpected binary boolean operator: %v", expr.Op)
+		}
+		rhs, err := Eval(expr.RHS, interpreter)
+		if err != nil {
+			return false, err
+		}
+		lhs, err := Eval(expr.LHS, interpreter)
+		if err != nil {
+			return false, err
+		}
+		switch expr.Op {
+		case OpAnd:
+			return rhs && lhs, nil
+		case OpOr:
+			return rhs || lhs, nil
+		}
+	case *UnaryExpr:
+		if expr.Op != OpNot {
+			return false, fmt.Errorf("unexpected boolean unary operator: %v", expr.Op)
+		}
+		val, err := Eval(expr.Expr, interpreter)
+		if err != nil {
+			return false, err
+		}
+		return !val, nil
+	default:
+		return interpreter(expr)
+	}
+	// unreachable
+	return false, fmt.Errorf("unexpected expression")
 }
 
 // BinExpr represents a boolean expression consisting of clauses of one boolean operator.
@@ -36,8 +97,28 @@ type BinExpr struct {
 	Op  Op
 }
 
-func (b BinExpr) IsAST()    {}
-func (b BinExpr) BoolExpr() {} // marker interface
+// Parse continues parsing, running the provided parser on all unparsed nodes.
+func (b *BinExpr) Parse(p parse.Parser) error {
+	if unparsed, ok := b.LHS.(parse.Unparsed); ok {
+		newLHS, err := p.Parse(unparsed.Contents)
+		if err != nil {
+			return err
+		}
+		b.LHS = newLHS
+	} else if err := b.LHS.Parse(p); err != nil {
+		return err
+	}
+	if unparsed, ok := b.RHS.(parse.Unparsed); ok {
+		newRHS, err := p.Parse(unparsed.Contents)
+		if err != nil {
+			return err
+		}
+		b.RHS = newRHS
+	} else if err := b.RHS.Parse(p); err != nil {
+		return err
+	}
+	return nil
+}
 
 // UnaryExpr represents a unary boolean expression.
 type UnaryExpr struct {
@@ -45,8 +126,18 @@ type UnaryExpr struct {
 	Expr parse.AST
 }
 
-func (u UnaryExpr) IsAST()    {}
-func (u UnaryExpr) BoolExpr() {}
+func (u *UnaryExpr) Parse(p parse.Parser) error {
+	if unparsed, ok := u.Expr.(parse.Unparsed); ok {
+		newExpr, err := p.Parse(unparsed.Contents)
+		if err != nil {
+			return err
+		}
+		u.Expr = newExpr
+	} else if err := u.Expr.Parse(p); err != nil {
+		return err
+	}
+	return nil
+}
 
 // Op represents a boolean operation.
 type Op uint8
@@ -81,8 +172,6 @@ const (
 	CloseParen
 )
 
-type token string
-
 type ParserOpt func(*Parser)
 
 type Parser struct {
@@ -90,7 +179,7 @@ type Parser struct {
 	keywords        map[string]struct{}
 	caseInsensitive bool
 
-	tokens []token
+	tokens []string
 	curr   int
 }
 
@@ -153,9 +242,13 @@ func (p *Parser) init() error {
 	return nil
 }
 
-func (p *Parser) Parse(str string) (parse.AST, error) {
-	p.tokens = p.tokenize(str)
+func (p *Parser) ParseStr(str string) (parse.AST, error) {
+	return p.Parse(p.tokenize(str))
+}
+
+func (p *Parser) Parse(tokens []string) (parse.AST, error) {
 	p.curr = 0
+	p.tokens = tokens
 	ast, err := p.parseExpr()
 	if err != nil {
 		return nil, err
@@ -166,49 +259,20 @@ func (p *Parser) Parse(str string) (parse.AST, error) {
 	return ast, nil
 }
 
-func (p *Parser) tokenize(str string) []token {
-	if p.caseInsensitive {
-		str = strings.ToLower(str)
-	}
-	fmt.Println("tokenizing", str)
-	runes := []rune(str)
-	var substr []rune
-	var result []token
-	for i := range runes {
-		if string(runes[i]) == p.config[OpenParen] ||
-			string(runes[i]) == p.config[CloseParen] {
-			if len(substr) != 0 {
-				result = append(result, token(substr))
-				substr = nil
-			}
-			result = append(result, token(runes[i]))
-			continue
-		}
-		if unicode.IsSpace(runes[i]) {
-			if len(substr) > 0 {
-				result = append(result, token(substr))
-				substr = nil
-			}
-			continue
-		}
-		substr = append(substr, runes[i])
-		if p.isKeyword(string(substr)) {
-			result = append(result, token(substr))
-			substr = nil
-			continue
-		}
-	}
-	if len(substr) > 0 {
-		result = append(result, token(substr))
-	}
-	return result
+func (p *Parser) tokenize(str string) []string {
+	openP, closeP := []rune(p.config[OpenParen])[0], []rune(p.config[CloseParen])[0]
+	return parse.Tokenize(str, openP, closeP, p.isKeyword)
 }
 
 func (p *Parser) match(token Token) bool {
 	if p.curr == len(p.tokens) {
 		return false
 	}
-	if string(p.tokens[p.curr]) == p.config[token] {
+	curr := p.tokens[p.curr]
+	if p.caseInsensitive {
+		curr = strings.ToLower(curr)
+	}
+	if curr == p.config[token] {
 		p.curr++
 		return true
 	}
@@ -216,10 +280,15 @@ func (p *Parser) match(token Token) bool {
 }
 
 func (p *Parser) peek() string {
-	return string(p.tokens[p.curr])
+	return p.tokens[p.curr]
 }
 
+// TODO: replace isKeyword with a Trie-based func that consumes runes until a keyword is matched or a space is hit.
+
 func (p *Parser) isKeyword(str string) bool {
+	if p.caseInsensitive {
+		str = strings.ToLower(str)
+	}
 	_, ok := p.keywords[str]
 	return ok
 }
@@ -238,7 +307,7 @@ func (p *Parser) parseAnd() (parse.AST, error) {
 		if err != nil {
 			return nil, err
 		}
-		return BinExpr{LHS: lhs, RHS: rhs, Op: OpAnd}, nil
+		return &BinExpr{LHS: lhs, RHS: rhs, Op: OpAnd}, nil
 	}
 	return lhs, nil
 }
@@ -253,7 +322,7 @@ func (p *Parser) parseOr() (parse.AST, error) {
 		if err != nil {
 			return nil, err
 		}
-		return BinExpr{LHS: lhs, RHS: rhs, Op: OpOr}, nil
+		return &BinExpr{LHS: lhs, RHS: rhs, Op: OpOr}, nil
 	}
 	return lhs, nil
 }
@@ -264,7 +333,7 @@ func (p *Parser) parseNot() (parse.AST, error) {
 		if err != nil {
 			return nil, err
 		}
-		return UnaryExpr{Expr: rest, Op: OpNot}, nil
+		return &UnaryExpr{Expr: rest, Op: OpNot}, nil
 	}
 	return p.parseParens()
 }

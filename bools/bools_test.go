@@ -1,29 +1,70 @@
-package bool
+package bools
 
 import (
 	"fmt"
 	"github.com/orkes-io/go-parse"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"strings"
 	"testing"
 )
+
+func TestParser_Eval(t *testing.T) {
+	p, err := NewParser()
+	require.NoError(t, err)
+
+	expr, err := p.ParseStr("x AND y OR z")
+	require.NoError(t, err)
+
+	tests := []struct {
+		input  map[string]bool
+		output bool
+	}{
+		{
+			map[string]bool{"x": true, "y": false, "z": true},
+			true,
+		},
+		{
+			map[string]bool{"x": false, "y": true, "z": true},
+			false,
+		},
+		{
+			map[string]bool{"x": false, "y": false, "z": true},
+			false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(strings.TrimRight(fmt.Sprintf("%v", tt.input)[4:], "]"), func(t *testing.T) {
+			v, err := Eval(expr, VarInterpreter(tt.input))
+			assert.NoError(t, err)
+			assert.EqualValues(t, tt.output, v)
+		})
+	}
+
+	_, err = Eval(expr, nil)
+	assert.ErrorIs(t, err, parse.ErrEval)
+}
 
 func TestParser_tokenize(t *testing.T) {
 	tests := []struct {
 		input  string
-		output []token
+		output []string
 	}{
 		{
 			"", nil,
 		},
 		{
-			"abc AND def", []token{"abc", "AND", "def"},
+			"abc AND def", []string{"abc", "AND", "def"},
 		},
 		{
-			"isToken = 123 AND x > 13", []token{"isToken", "=", "123", "AND", "x", ">", "13"},
+			"isToken = 123 AND x > 13", []string{"isToken", "=", "123", "AND", "x", ">", "13"},
 		},
 		{
-			"abc AND NOT(def OR xyz)", []token{"abc", "AND", "NOT", "(", "def", "OR", "xyz", ")"},
+			"abc AND NOT(def OR xyz)", []string{"abc", "AND", "NOT", "(", "def", "OR", "xyz", ")"},
+		},
+		{
+			"not note and andes", []string{"not", "note", "and", "andes"},
 		},
 	}
 
@@ -90,7 +131,7 @@ func TestParser_Parse(t *testing.T) {
 		t.Run(tt.input, func(t *testing.T) {
 			p, err := NewParser()
 			require.NoError(t, err)
-			ast, err := p.Parse(tt.input)
+			ast, err := p.ParseStr(tt.input)
 			require.NoError(t, err)
 			assert.EqualValues(t, tt.output, ast)
 		})
@@ -111,7 +152,7 @@ func TestParser_ParseError(t *testing.T) {
 		t.Run(tt, func(t *testing.T) {
 			p, err := NewParser()
 			require.NoError(t, err)
-			ast, err := p.Parse(tt)
+			ast, err := p.ParseStr(tt)
 			assert.ErrorIs(t, err, parse.ErrParse, "ast was: %#v", ast)
 		})
 	}
@@ -142,7 +183,7 @@ func TestWithTokens(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			ast, err := p.Parse(tt.input)
+			ast, err := p.ParseStr(tt.input)
 			assert.NoError(t, err)
 			assert.EqualValues(t, tt.output, ast)
 		})
@@ -184,7 +225,7 @@ func TestWithCaseSensitive(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			ast, err := p.Parse(tt.input)
+			ast, err := p.ParseStr(tt.input)
 			assert.NoError(t, err)
 			assert.EqualValues(t, tt.output, ast)
 		})
