@@ -1,6 +1,6 @@
 module github.com/orkes-io/go-parse
 
-go 1.20
+go 1.18
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
