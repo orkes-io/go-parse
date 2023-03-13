@@ -147,24 +147,24 @@ func TestWithTokens(t *testing.T) {
 }
 
 func eq(a, b parse.AST) parse.AST {
-	return EqualExpr{LHS: a, RHS: b, Op: OpEqual}
+	return &EqualExpr{LHS: a, RHS: b, Op: OpEqual}
 }
 
 func neq(a, b parse.AST) parse.AST {
-	return EqualExpr{LHS: a, RHS: b, Op: OpNotEqual}
+	return &EqualExpr{LHS: a, RHS: b, Op: OpNotEqual}
 }
 
 func gt(a, b parse.AST) parse.AST {
-	return OrdinalExpr{LHS: a, RHS: b, Op: OpGreater}
+	return &OrdinalExpr{LHS: a, RHS: b, Op: OpGreater}
 }
 func lt(a, b parse.AST) parse.AST {
-	return OrdinalExpr{LHS: a, RHS: b, Op: OpLess}
+	return &OrdinalExpr{LHS: a, RHS: b, Op: OpLess}
 }
 func gte(a, b parse.AST) parse.AST {
-	return OrdinalExpr{LHS: a, RHS: b, Op: OpGreaterOrEqual}
+	return &OrdinalExpr{LHS: a, RHS: b, Op: OpGreaterOrEqual}
 }
 func lte(a, b parse.AST) parse.AST {
-	return OrdinalExpr{LHS: a, RHS: b, Op: OpLessOrEqual}
+	return &OrdinalExpr{LHS: a, RHS: b, Op: OpLessOrEqual}
 }
 
 // un stands for unparsed and returns a parse.Unparsed

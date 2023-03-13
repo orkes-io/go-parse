@@ -233,15 +233,15 @@ func TestWithCaseSensitive(t *testing.T) {
 }
 
 func or(lhs parse.AST, rhs parse.AST) parse.AST {
-	return BinExpr{LHS: lhs, RHS: rhs, Op: OpOr}
+	return &BinExpr{LHS: lhs, RHS: rhs, Op: OpOr}
 }
 
 func and(lhs parse.AST, rhs parse.AST) parse.AST {
-	return BinExpr{LHS: lhs, RHS: rhs, Op: OpAnd}
+	return &BinExpr{LHS: lhs, RHS: rhs, Op: OpAnd}
 }
 
 func not(inside parse.AST) parse.AST {
-	return UnaryExpr{Expr: inside, Op: OpNot}
+	return &UnaryExpr{Expr: inside, Op: OpNot}
 }
 
 // un stands for unparsed and returns a parse.Unparsed
