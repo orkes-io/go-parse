@@ -58,35 +58,42 @@ func (i Interpreter[T]) WithFallback(b Interpreter[T]) Interpreter[T] {
 
 // Tokenize is a general-purpose expression tokenizer which handles keywords according to the isKeyword func passed.
 // Open and close braces must be single runes and are handled according to the provided runes.
-func Tokenize(str string, open, close rune, isKeyword func(string) bool) []string {
+func Tokenize(str string, open, close rune, keywordMatcher *KeywordTrie) []string {
 	runes := []rune(str)
 	var substr []rune
 	var result []string
-	for i := range runes {
+	push := func() { // push substr onto result
+		result = append(result, string(substr))
+		substr = nil
+	}
+
+	for i := 0; i < len(runes); i++ {
 		if runes[i] == open || runes[i] == close {
-			if len(substr) != 0 {
-				result = append(result, string(substr))
-				substr = nil
+			if len(substr) > 0 {
+				push()
 			}
 			result = append(result, string(runes[i]))
 			continue
 		}
 		if unicode.IsSpace(runes[i]) {
 			if len(substr) > 0 {
-				result = append(result, string(substr))
-				substr = nil
+				push()
 			}
 			continue
 		}
-		substr = append(substr, runes[i])
-		if isKeyword(string(substr)) {
-			result = append(result, string(substr))
-			substr = nil
-			continue
+		matched := keywordMatcher.Match(runes[i:])
+		if len(matched) > 0 {
+			if len(substr) > 0 {
+				push()
+			}
+			result = append(result, matched)
+			i += len(matched) - 1
+		} else {
+			substr = append(substr, runes[i])
 		}
 	}
 	if len(substr) > 0 {
-		result = append(result, string(substr))
+		push()
 	}
 	return result
 }

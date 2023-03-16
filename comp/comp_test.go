@@ -17,7 +17,7 @@ func TestParser_tokenize(t *testing.T) {
 			"", nil,
 		},
 		{
-			"x => y", []string{"x", "=>", "y"},
+			"x >= y", []string{"x", ">=", "y"},
 		},
 		{
 			"x < y", []string{"x", "<", "y"},
@@ -48,7 +48,7 @@ func TestParser_Parse(t *testing.T) {
 		output parse.AST
 	}{
 		{
-			"abc => def",
+			"abc >= def",
 			gte(un("abc"), un("def")),
 		},
 		{
@@ -64,7 +64,7 @@ func TestParser_Parse(t *testing.T) {
 			gt(un("x"), gt(un("y"), un("3"))),
 		},
 		{
-			"(x > 3) == ((y == 3) != ((z < 8) == (y =< 4)))",
+			"(x > 3) == ((y == 3) != ((z < 8) == (y <= 4)))",
 			eq(gt(un("x"), un("3")), neq(eq(un("y"), un("3")), eq(lt(un("z"), un("8")), lte(un("y"), un("4"))))),
 		},
 	}

@@ -35,7 +35,8 @@ func TestParser_Eval(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(strings.TrimRight(fmt.Sprintf("%v", tt.input)[4:], "]"), func(t *testing.T) {
+		name := strings.TrimRight(fmt.Sprintf("%v", tt.input)[4:], "]")
+		t.Run(name, func(t *testing.T) {
 			v, err := Eval(expr, VarInterpreter(tt.input))
 			assert.NoError(t, err)
 			assert.EqualValues(t, tt.output, v)
@@ -53,6 +54,12 @@ func TestParser_tokenize(t *testing.T) {
 	}{
 		{
 			"", nil,
+		},
+		{
+			"xyzNOT OR abc", []string{"xyz", "NOT", "OR", "abc"},
+		},
+		{
+			"x AND y OR z", []string{"x", "AND", "y", "OR", "z"},
 		},
 		{
 			"abc AND def", []string{"abc", "AND", "def"},
@@ -107,10 +114,6 @@ func TestParser_Parse(t *testing.T) {
 			and(un("a"), and(un("b"), and(un("c"), or(un("d"), or(un("x"), or(un("y"), un("z"))))))),
 		},
 		{
-			"xyzNOT OR abc",
-			or(un("xyzNOT"), un("abc")),
-		},
-		{
 			"x OR y AND z OR w",
 			and(or(un("x"), un("y")), or(un("z"), un("w"))),
 		},
@@ -147,6 +150,7 @@ func TestParser_ParseError(t *testing.T) {
 		"((((((x > 5))))",
 		"()",
 		"AND 7",
+		"xyzNOT OR abc",
 	}
 	for _, tt := range tests {
 		t.Run(tt, func(t *testing.T) {

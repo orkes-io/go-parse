@@ -176,8 +176,8 @@ type ParserOpt func(*Parser)
 
 type Parser struct {
 	config          map[Token]string
-	keywords        map[string]struct{}
 	caseInsensitive bool
+	matcher         *parse.KeywordTrie
 
 	tokens []string
 	curr   int
@@ -208,6 +208,7 @@ func NewParser(opts ...ParserOpt) (*Parser, error) {
 			OpenParen:  "(",
 			CloseParen: ")",
 		},
+		matcher: &parse.KeywordTrie{},
 	}
 	for _, opt := range opts {
 		opt(p)
@@ -232,11 +233,10 @@ func (p *Parser) init() error {
 		}
 		p.config = newTokens
 	}
-	p.keywords = make(map[string]struct{}, len(p.config))
 	for _, str := range p.config {
-		p.keywords[str] = struct{}{}
+		p.matcher.Add(str)
 	}
-	if len(p.keywords) != 5 {
+	if p.matcher.Count() != 5 {
 		return fmt.Errorf("%w: token collision detected; at least two of the configured tokens are identical", parse.ErrConfig)
 	}
 	return nil
@@ -261,7 +261,7 @@ func (p *Parser) Parse(tokens []string) (parse.AST, error) {
 
 func (p *Parser) tokenize(str string) []string {
 	openP, closeP := []rune(p.config[OpenParen])[0], []rune(p.config[CloseParen])[0]
-	return parse.Tokenize(str, openP, closeP, p.isKeyword)
+	return parse.Tokenize(str, openP, closeP, p.matcher)
 }
 
 func (p *Parser) match(token Token) bool {
@@ -283,14 +283,11 @@ func (p *Parser) peek() string {
 	return p.tokens[p.curr]
 }
 
-// TODO: replace isKeyword with a Trie-based func that consumes runes until a keyword is matched or a space is hit.
-
 func (p *Parser) isKeyword(str string) bool {
 	if p.caseInsensitive {
 		str = strings.ToLower(str)
 	}
-	_, ok := p.keywords[str]
-	return ok
+	return p.matcher.Contains(str)
 }
 
 func (p *Parser) parseExpr() (parse.AST, error) {
