@@ -13,7 +13,7 @@
 // provides a case-sensitive variety of ANSI SQL syntax.
 //
 // Care must be taken when selecting a NOT operator, since the parser provided by this package is not aware of
-// the expression language in use. For instance, selecting '!' as the NOT operator may result in conflicts which used
+// the expression language in use. For instance, selecting '!' as the NOT operator may result in conflicts when used
 // with expressions containing '!=', due to parsing ambiguity.
 package bools
 

@@ -6,8 +6,8 @@
 //	term    -> '(' expr ')' | unparsed
 //	unparsed -> .*
 //
-// It leaves unparsed portions of the expression in parse.Unparsed nodes, for later consumption. Terms in this grammar
-// match
+// It leaves unparsed portions of the expression in parse.Unparsed nodes, for later consumption. Terms in the default
+// syntax match C-like languages.
 package comp
 
 import (
