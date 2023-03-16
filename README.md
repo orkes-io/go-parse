@@ -1,4 +1,8 @@
 # go-parse
+
+![GitHub](https://img.shields.io/github/license/orkes-io/go-parse)
+![GitHub tag (latest SemVer)](https://img.shields.io/github/v/tag/orkes-io/go-parse)
+
 Simple expression parsers in Go.
 
 ### Installation
