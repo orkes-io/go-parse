@@ -1,3 +1,7 @@
+// Package parse implements parsers for several useful expression grammars.
+//
+// All parsers from this package produce a parse.AST which can be used to continue parsing using other grammars. The
+// order of parsing matters significantly.
 package parse
 
 import (
@@ -27,9 +31,10 @@ type AST interface {
 
 // Unparsed represents a list of unparsed tokens in an expression.
 type Unparsed struct {
-	Contents []string
+	Contents []string // Contents is a list of tokens which could not be parsed as part of the expression.
 }
 
+// Parse should never be called on an Unparsed node in a correct implementation. Doing so returns ErrParse.
 func (u Unparsed) Parse(p Parser) error {
 	// Parse calls should never make it to an Unparsed node.
 	return fmt.Errorf("%w: attempted to parse Unparsed node", ErrParse)

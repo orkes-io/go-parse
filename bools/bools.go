@@ -97,7 +97,7 @@ type BinExpr struct {
 	Op  Op
 }
 
-// Parse continues parsing, running the provided parser on all unparsed nodes.
+// Parse runs the provided parse.Parser on all the unparsed nodes in this AST.
 func (b *BinExpr) Parse(p parse.Parser) error {
 	if unparsed, ok := b.LHS.(parse.Unparsed); ok {
 		newLHS, err := p.Parse(unparsed.Contents)
@@ -126,6 +126,7 @@ type UnaryExpr struct {
 	Expr parse.AST
 }
 
+// Parse runs the provided parse.Parser on all unparsed nodes in this AST.
 func (u *UnaryExpr) Parse(p parse.Parser) error {
 	if unparsed, ok := u.Expr.(parse.Unparsed); ok {
 		newExpr, err := p.Parse(unparsed.Contents)
@@ -139,7 +140,7 @@ func (u *UnaryExpr) Parse(p parse.Parser) error {
 	return nil
 }
 
-// Op represents a boolean operation.
+// Op represents a boolean operation recognized by this grammar.
 type Op uint8
 
 const (
@@ -165,11 +166,11 @@ func (o Op) String() string {
 type Token uint8
 
 const (
-	And Token = iota + 1
-	Or
-	Not
-	OpenParen
-	CloseParen
+	And        Token = iota + 1 // And represents boolean and.
+	Or                          // Or represents boolean or.
+	Not                         // Not represents boolean not.
+	OpenParen                   // OpenParen represents the start of a sub-expression.
+	CloseParen                  // CloseParen represents the end of a sub-expression.
 )
 
 type ParserOpt func(*Parser)
@@ -183,7 +184,8 @@ type Parser struct {
 	curr   int
 }
 
-// WithTokens configures a parser with the provided token mapping.
+// WithTokens configures the syntax used by this parser using the provided token mapping. The provided map must contain
+// distinct entries for each Token provided in this package: And, Or, Not, OpenParen, and CloseParen.
 func WithTokens(config map[Token]string) ParserOpt {
 	return func(parser *Parser) {
 		parser.config = config
@@ -242,10 +244,13 @@ func (p *Parser) init() error {
 	return nil
 }
 
+// ParseStr tokenizes and parses the provided string.
 func (p *Parser) ParseStr(str string) (parse.AST, error) {
 	return p.Parse(p.tokenize(str))
 }
 
+// Parse parses the provided list of tokens, producing a parse.AST. An error is returned if the tokens provided cannot
+// be parsed.
 func (p *Parser) Parse(tokens []string) (parse.AST, error) {
 	p.curr = 0
 	p.tokens = tokens

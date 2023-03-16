@@ -74,7 +74,7 @@ func (e *OrdinalExpr) Parse(p parse.Parser) error {
 	return nil
 }
 
-// Op represents a comparison operation.
+// Op represents one of six possible comparison operations recognized by this grammar.
 type Op uint8
 
 const (
@@ -95,16 +95,17 @@ func (o Op) String() string {
 	case OpGreater:
 		return ">"
 	case OpGreaterOrEqual:
-		return "=>"
+		return ">="
 	case OpLess:
 		return "<"
 	case OpLessOrEqual:
-		return "=<"
+		return "<="
 	default:
 		return "unknown op"
 	}
 }
 
+// Token is a token required by this grammar.
 type Token uint8
 
 const (
@@ -120,6 +121,7 @@ const (
 
 type ParserOpt func(*Parser)
 
+// Parser parses this grammar.
 type Parser struct {
 	config          map[Token]string
 	caseInsensitive bool
@@ -129,18 +131,24 @@ type Parser struct {
 	curr    int
 }
 
+// WithTokens configures the syntax used by this parser using the provided token mapping. The provided map must contain
+// distinct entries for each Token provided in this package: Equal, NotEqual, Greater, GreaterOrEqual, Less,
+// LessOrEqual, OpenParen, and CloseParen.
 func WithTokens(config map[Token]string) ParserOpt {
 	return func(parser *Parser) {
 		parser.config = config
 	}
 }
 
+// WithCaseSensitive can be used to set whether this parser is case sensitive.
 func WithCaseSensitive(caseSensitive bool) ParserOpt {
 	return func(parser *Parser) {
 		parser.caseInsensitive = !caseSensitive
 	}
 }
 
+// NewParser returns a parser configured according to the provided options. If no options are configured, the default
+// parser is returned.
 func NewParser(opts ...ParserOpt) (*Parser, error) {
 	p := &Parser{
 		config: map[Token]string{
@@ -187,10 +195,13 @@ func (p *Parser) init() error {
 	return nil
 }
 
+// ParseStr tokenizes and parses the provided string. See Parser.Parse for details.
 func (p *Parser) ParseStr(str string) (parse.AST, error) {
 	return p.Parse(p.tokenize(str))
 }
 
+// Parse parses the provided list of tokens, producing a parse.AST. An error is returned if the provided tokens do not
+// conform to the grammar specified in this package.
 func (p *Parser) Parse(tokens []string) (parse.AST, error) {
 	p.curr = 0
 	p.tokens = tokens
